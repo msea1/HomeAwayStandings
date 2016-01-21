@@ -4,6 +4,7 @@ import requests
 import pymysql
 import configparser
 import re
+import os
 import json
 from bs4 import BeautifulSoup
 from decimal import Decimal
@@ -93,8 +94,8 @@ def build_cache():
 
 
 def get_games():
-    req = requests.get("http://www.mlssoccer.com/schedule?month=all&year=%s&club=all&",
-        "competition_type=46&broadcast_type=all&op=Search&form_id=mls_schedule_form" % YEAR)
+    req = requests.get("http://www.mlssoccer.com/schedule?month=all&year=%s&club=all&" % YEAR,
+        "competition_type=46&broadcast_type=all&op=Search&form_id=mls_schedule_form")
     raw_src = req.text
     soup = BeautifulSoup(raw_src)
 
@@ -180,8 +181,7 @@ def build_teams():
 
 
 def compile_cache():
-    file_path = config['cache']['filepath']
-    cache_file = open(file_path, 'w')
+    cache_file = open('./mls_table.cache', 'w')
     output = '{ "year": {"' + str(YEAR) + '": {'
     for team in TEAMS:
         team_obj = TEAMS[team]
