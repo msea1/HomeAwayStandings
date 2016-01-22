@@ -97,7 +97,7 @@ def get_games():
     req = requests.get("http://www.mlssoccer.com/schedule?month=all&year=%s&club=all&" % YEAR,
         "competition_type=46&broadcast_type=all&op=Search&form_id=mls_schedule_form")
     raw_src = req.text
-    soup = BeautifulSoup(raw_src)
+    soup = BeautifulSoup(raw_src, "html.parser")
 
     for game in soup.findAll("tr", {'class':['even', 'odd']}):
         try:
