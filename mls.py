@@ -14,23 +14,43 @@ TEAMS = {}
 db = None
 config = None
 date_regex = re.compile(".*matchcenter/(\d\d\d\d-\d\d-\d\d)-.*")
-western_conf = ['Sporting KC', 'Seattle', 'FC Dallas','Real Salt Lake',
-    'LA Galaxy','Portland','Vancouver','Chivas USA','San Jose','Colorado']
+western_conf = {'Colorado Rapids': "COL",
+                'FC Dallas': "DAL",
+                'Houston Dynamo': "HOU",
+                'LA Galaxy': 'LAG',
+                'Portland Timbers': 'POR',
+                'Real Salt Lake': 'RSL',
+                'San Jose Earthquakes': 'SJQ',
+                'Seattle Sounders FC': 'SEA',
+                'Sporting Kansas City': 'SKC',
+                'Vancouver Whitecaps FC': 'VAN'}
+eastern_conf = {'Chicago Fire': 'CHI',
+                'Columbus Crew SC': 'COL',
+                'D.C. United': 'DCU',
+                'Montreal Impact': 'MTL',
+                'New England Revolution': 'NEW',
+                'New York City FC': 'NYC',
+                'New York Red Bulls': 'NYR',
+                'Orlando City SC': 'ORL',
+                'Philadelphia Union': 'PHL',
+                'Toronto FC': 'TOR'}
 YEAR = 2016
+
 
 class TeamEncoder(json.JSONEncoder):
     def default(self, obj):
-        return obj.__dict__ 
+        return obj.__dict__
 
 
 class Team(object):
     def __init__(self, name, year):
-        self.name = name
         self.season = year
         if name in western_conf:
             self.conference = 'W'
+            self.name = western_conf[name]
         else:
             self.conference = 'E'
+            self.name = eastern_conf[name]
         self.games_played = 0
         self.games_left = 0
         self.points = 0
@@ -87,34 +107,39 @@ def build_cache():
     global GAMES
     cursor = db.cursor()
     cursor.execute('SELECT gameDate, homeTeam, awayTeam, homeScore, awayScore ',
-        'FROM fixtures WHERE YEAR(gamedate)=%s' % YEAR)
+                   'FROM fixtures WHERE YEAR(gamedate)=%s' % YEAR)
     for row in cursor.fetchall():
         game_key = "%s ~ %s ~ %s ~ %s ~ %s" % (row[0], row[1], row[2], row[3], row[4])
         GAMES[game_key] = "exists"
 
 
 def get_games():
-    req = requests.get("http://www.mlssoccer.com/schedule?month=all&year=%s&club=all&" % YEAR,
-        "competition_type=46&broadcast_type=all&op=Search&form_id=mls_schedule_form")
+    url = "http://www.mlssoccer.com/schedule?month=all&year=%s&" % YEAR
+    url += ("club=select&club_options=9&op=Update&form_id=mp7_schedule_hub_search_filters_form")
+    req = requests.get(url)
     raw_src = req.text
     soup = BeautifulSoup(raw_src, "html.parser")
 
-    for game in soup.findAll("tr", {'class':['even', 'odd']}):
+    for game in soup.findAll("li", {'class':['row_no_padding']}):
         try:
-            home_team = str(game.find("div", attrs={"class": "field-home-team"}).get_text()).strip()
-            away_team = str(game.find("div", attrs={"class": "field-away-team"}).get_text()).strip()
-            game_score = game.find("div", attrs={"class": "field-score"})
-            game_info = game.find("a", attrs={"class": "link-button sch_matchcenter"})
-            href = str(game_info['href']).strip()
-            game_date = date_regex.findall(href)[0]
-            if game_score is None:  # game in future
-                    scores = [-1, -1]
+            home_line = game.find("div", attrs={"class": "home_club"})
+            home_team = home_line.find("span", attrs={"class": "club_name"}).get_text().strip()
+            away_line = game.find("div", attrs={"class": "vs_club"})
+            away_team = away_line.find("span", attrs={"class": "club_name"}).get_text().strip()
+
+            home_score = home_line.find("span", attrs={"class": "match_score"})
+            if home_score is None:
+                scores = [-1, -1]
             else:
-                    game_score = str(game_score.get_text()).strip()
-                    scores = [x.strip() for x in game_score.split('-')]
+                scores = [home_score.get_text()]
+                scores.append(away_line.find("span", attrs={"class": "match_score"}).get_text())
+
+            game_date = date_regex.findall(str(game))[0]
+
             insert_game(game_date, home_team, away_team, scores)
         except AttributeError:
             print(game)
+
 
 def insert_game(game_date, home_team, away_team, scores):
     global GAMES
@@ -145,37 +170,37 @@ def build_teams():
             TEAMS[game_info[2]] = Team(game_info[2], YEAR)
         road_team = TEAMS[game_info[2]]
         if home_score < 0:
-            home_team.games_left+=1
-            road_team.games_left+=1
-            home_team.home_games_left+=1
-            road_team.road_games_left+=1
+            home_team.games_left += 1
+            road_team.games_left += 1
+            home_team.home_games_left += 1
+            road_team.road_games_left += 1
         else:
-            home_team.games_played+=1
-            home_team.home_games_played+=1
-            home_team.goals_scored+=home_score
-            home_team.home_goals_scored+=home_score
-            home_team.goals_allowed+=road_score
-            home_team.home_goals_allowed+=road_score
-            road_team.games_played+=1
-            road_team.road_games_played+=1
-            road_team.goals_scored+=road_score
-            road_team.road_goals_scored+=road_score
-            road_team.goals_allowed+=home_score
-            road_team.road_goals_allowed+=home_score
+            home_team.games_played += 1
+            home_team.home_games_played += 1
+            home_team.goals_scored += home_score
+            home_team.home_goals_scored += home_score
+            home_team.goals_allowed += road_score
+            home_team.home_goals_allowed += road_score
+            road_team.games_played += 1
+            road_team.road_games_played += 1
+            road_team.goals_scored += road_score
+            road_team.road_goals_scored += road_score
+            road_team.goals_allowed += home_score
+            road_team.road_goals_allowed += home_score
 
             if home_score > road_score:
-                home_team.points+=3
-                home_team.home_points+=3
+                home_team.points += 3
+                home_team.home_points += 3
 
             elif home_score < road_score:
-                road_team.points+=3
-                road_team.road_points+=3
+                road_team.points += 3
+                road_team.road_points += 3
 
             else:
-                home_team.points+=1
-                home_team.home_points+=1
-                road_team.points+=1
-                road_team.road_points+=1
+                home_team.points += 1
+                home_team.home_points += 1
+                road_team.points += 1
+                road_team.road_points += 1
     for team in TEAMS:
         TEAMS[team].project()
 
