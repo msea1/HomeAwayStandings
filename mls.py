@@ -1,13 +1,13 @@
 #!/usr/bin/python
 
-import requests
-import pymysql
 import configparser
-import re
-import os
 import json
-from bs4 import BeautifulSoup
+import os
+import re
 from decimal import Decimal
+from bs4 import BeautifulSoup
+import pymysql
+import requests
 
 GAMES = {}
 TEAMS = {}
@@ -25,7 +25,7 @@ western_conf = {'Colorado Rapids': "COL",
                 'Sporting Kansas City': 'SKC',
                 'Vancouver Whitecaps FC': 'VAN'}
 eastern_conf = {'Chicago Fire': 'CHI',
-                'Columbus Crew SC': 'COL',
+                'Columbus Crew SC': 'CMB',
                 'D.C. United': 'DCU',
                 'Montreal Impact': 'MTL',
                 'New England Revolution': 'NEW',
@@ -88,8 +88,8 @@ class Team(object):
 def read_config():
     global config
     config = configparser.ConfigParser()
-    configFile = os.path.join(os.path.dirname(__file__), "config.ini")
-    config.read(configFile)
+    config_file = os.path.join(os.path.dirname(__file__), "config.ini")
+    config.read(config_file)
     return config
 
 
@@ -211,14 +211,14 @@ def compile_cache():
     for team in TEAMS:
         team_obj = TEAMS[team]
         output += '"' + team + '": '
-        output += json.dumps(team_obj.__dict__, sort_keys=True, default=to_JSON)
+        output += json.dumps(team_obj.__dict__, sort_keys=True, default=to_json)
         output += ","
     output = output[:-1] + '}}}'
     cache_file.write(output)
     cache_file.close()
 
 
-def to_JSON(obj):
+def to_json(obj):
     if isinstance(obj, Decimal):
         return float(obj)
     else:
